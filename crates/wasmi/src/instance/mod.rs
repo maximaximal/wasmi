@@ -21,6 +21,8 @@ use crate::{
     WasmResults,
     func::FuncError,
     store::Stored,
+    module::export::ExternIdx,
+    module::export::FuncIdx,
 };
 
 mod builder;
@@ -104,6 +106,20 @@ impl Instance {
             .get_export(name)
     }
 
+    /// Returns the value represented by the given Index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this [`Instance`].
+    pub fn get_extern_type(&self, store: impl AsContext, idx: ExternIdx) -> Option<Extern> {
+        store
+            .as_context()
+            .store
+            .inner
+            .resolve_instance(self)
+            .get_extern_type_safe(idx)
+    }
+
     /// Looks up an exported [`Func`] value by `name`.
     ///
     /// Returns `None` if there was no export named `name`,
@@ -114,6 +130,18 @@ impl Instance {
     /// If `store` does not own this [`Instance`].
     pub fn get_func(&self, store: impl AsContext, name: &str) -> Option<Func> {
         self.get_export(store, name)?.into_func()
+    }
+
+    /// Looks up an exported [`Func`] value by `FuncIdx`.
+    ///
+    /// Returns `None` if there was no function named `name`,
+    /// or if there was but it wasn’t a function.
+    ///
+    /// # Panics
+    ///
+    /// If `store` does not own this [`Instance`].
+    pub fn get_func_by_idx(&self, store: impl AsContext, idx: FuncIdx) -> Option<Func> {
+        self.get_extern_type(store, idx)?.into_func()
     }
 
     /// Looks up an exported [`Func`] value by `name`.
@@ -140,6 +168,34 @@ impl Instance {
         Results: WasmResults,
     {
         self.get_export(&store, name)
+            .and_then(Extern::into_func)
+            .ok_or_else(|| Error::from(FuncError::ExportedFuncNotFound))?
+            .typed::<Params, Results>(store)
+    }
+
+    /// Looks up an exported [`Func`] value by `FuncIdx`.
+    ///
+    /// Returns `None` if there was no function with ID `FuncIdx`.
+    ///
+    /// # Errors
+    ///
+    /// - If there is no export named `name`.
+    /// - If there is no exported function named `name`.
+    /// - If `Params` or `Results` do not match the exported function type.
+    ///
+    /// # Panics
+    ///
+    /// If `store` does not own this [`Instance`].
+    pub fn get_typed_func_by_idx<Params, Results>(
+        &self,
+        store: impl AsContext,
+        idx: FuncIdx,
+    ) -> Result<TypedFunc<Params, Results>, Error>
+    where
+        Params: WasmParams,
+        Results: WasmResults,
+    {
+        self.get_extern_type(&store, idx)
             .and_then(Extern::into_func)
             .ok_or_else(|| Error::from(FuncError::ExportedFuncNotFound))?
             .typed::<Params, Results>(store)

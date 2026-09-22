@@ -427,7 +427,7 @@ impl Module {
     /// # Note
     ///
     /// This function assumes that the given [`ExternType`] is valid.
-    fn get_extern_type(&self, idx: ExternIdx) -> ExternType {
+    pub fn get_extern_type(&self, idx: ExternIdx) -> ExternType {
         let header = self.module_header();
         match idx {
             ExternIdx::Func(index) => {
@@ -446,6 +446,52 @@ impl Module {
             ExternIdx::Global(index) => {
                 let global_type = header.globals[index.into_u32() as usize];
                 ExternType::Global(global_type)
+            }
+        }
+    }
+
+    /// Returns the [`ExternType`] for a given [`ExternIdx`] if there
+    /// is any.
+    ///
+    /// # Note
+    ///
+    /// This function checks if the given [`ExternType`] is valid before returning.
+    pub fn get_extern_type_safe(&self, idx: ExternIdx) -> Option<ExternType> {
+        let header = self.module_header();
+        let idx_usize = idx.into_u32() as usize;
+        match idx {
+            ExternIdx::Func(index) => {
+                if idx_usize < header.funcs.len() {
+                    let dedup = &header.funcs[idx_usize];
+                    let func_type = self.engine().resolve_func_type(dedup, Clone::clone);
+                    Some(ExternType::Func(func_type))
+                } else {
+                    None
+                }
+            }
+            ExternIdx::Table(index) => {
+                if idx_usize < header.tables.len() {
+                    let table_type = header.tables[idx_usize];
+                    Some(ExternType::Table(table_type))
+                } else {
+                    None
+                }
+            }
+            ExternIdx::Memory(index) => {
+                if idx_usize < header.memories.len() {
+                    let memory_type = header.memories[index.into_u32() as usize];
+                    Some(ExternType::Memory(memory_type))
+                } else {
+                    None
+                }
+            }
+            ExternIdx::Global(index) => {
+                if idx_usize < header.globals.len() {
+                    let global_type = header.globals[index.into_u32() as usize];
+                    ExternType::Global(global_type)
+                } else {
+                    None
+                }
             }
         }
     }
